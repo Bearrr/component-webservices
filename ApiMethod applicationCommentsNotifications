@@ -1,0 +1,51 @@
+<?php
+
+defined('_JEXEC') or die('Restricted access');
+
+use DataTables\dtHelper;
+
+class Need
+{
+    public function getData($function)
+    {
+        $response = json_encode(['error' => 'incorrect function']);
+        switch ($function) {
+             case 'applicationCommentsNotifications':
+                $response = $this->applicationCommentsNotifications();
+                break;
+        }
+
+        echo $response;
+    }
+
+ public function applicationCommentsNotifications()
+    {
+
+        $db = FabrikWorker::getDbo();
+        $app = JFactory::getApplication();
+
+        $user = JFactory::getUser();
+        $userid = $user->id * 1;
+        $input = $app->input;
+        $dev = (int)$input->get('dev', 0);
+        $mnn_id = (int)$input->get('mnn_id', 0);
+        $zoz = (int)$input->get('zoz', 0);
+        $km = (int)$input->get('km', 0);
+
+        if ($dev == 1) $userid = 509;
+        if ($userid == 0)
+            return json_encode(['success' => false, 'error' => 'Для запиту інформації необхідно пройти авторизацію. Спробуйте оновити сторінку та авторизуватись.']);
+
+        if ($zoz == 1) {
+            $db->setQuery("update med_application_comments set notification = 0 where mnn_id =$mnn_id  and user_to=$userid");
+            $db->execute();
+        } elseif ($km == 1) {
+            $db->setQuery("update med_application_comments set notification = 0 where mnn_id =$mnn_id  and user_to=$userid ");
+            $db->execute();
+        } else {
+            return json_encode(['error' => 'Помилка ідентифікації юзера']);
+        }
+
+        return json_encode(['success' => true]);
+    }
+}
