@@ -1,0 +1,560 @@
+<?php
+defined('_JEXEC') or die('Restricted access');
+
+require('/usr/sites/meddata.com.ua/vendor/autoload.php');
+require('epidermoliz_loc_sq.php');
+
+use DataTables\dtHelper;
+
+use Dompdf\Dompdf;
+use Dompdf\Options;
+
+
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+
+class Pdf
+{
+    public function getData($function)
+    {
+        $response = json_encode(['error' => 'incorrect function']);
+        switch ($function) {
+        case 'getConsolidatedNeedExcel':
+                $response = $this->getConsolidatedNeedExcel();
+                break;  
+        }
+        echo $response;
+    }
+    function insert_patients($type, $spreadsheet)
+    {
+    if ($type == 'gepatit_2024') $typelist = "gepatit_c_2024','gepatit_b_2024','gepatit_child_2024";
+    else $typelist = $type;
+        $db = FabrikWorker::getDbo();
+
+        $db->setQuery("SELECT  p.id,p.num,p.name,p.city,date(date_add(p.birth_date,INTERVAL 3 HOUR)) birth_date,p.weight,p.height,p.sex,p.func_class,p.diagnos,p.activity,p.therapy,p.first_therapy,
+p.first_stop,p.second_therapy,p.second_stop,p.severity,p.cyrros,p.virus_load,p.alt_ul,p.experience,p.kidney,p.exacerbation,p.distribution,p.complications,
+p.cogort1,p.cogort2,p.cogort3,p.cogort4,p.cnt cogort_cnt,p.type_code,
+p.diagnos11,
+p.other_diagnos,
+p.profilactic,
+p.profilactic_protocol,
+p.pill_type12,
+p.home_usage,
+p.home_usage_cnt,
+p.pill_type21,
+p.pill_type11,
+p.pill_type22,
+p.pill_type3,
+p.urgent,
+p.urgent_text,
+p.urgent_volume,
+p.pill_type41,
+p.stomat,
+p.stomat_text,
+p.stomat_volume,
+p.pill_type51,
+p.future,
+p.future_text,
+p.future_volume,
+p.pill_type61,
+m.name pillname,m.dosage pilldosage,m.release_form,l.cnt,l.yearly_cnt,
+l.yearly_sum,l.cnt*ifnull(m.dosage_num,0) calc_dosage,l.current_year,l.dosage,l.dose,l.comment,
+case when l.active=1 then 'TAK' else 'HI' end active,p.transplant_organ,p.transplant_organ_other,p.transplant_date,p.new_pill,p.kidney_cnt,p.liver_cnt,p.name1, concat(r.value,'/',r2.value) AS region,
+ p.actual_stay, p.current_pill, p.current_pill_fin,p.prev_pill,p.prev_pill_fin,p.calc,p.comment, p.phone, p.contact, p.age, p.cnt as patients_cnt, l.scheme, p.cogort6, p.patients, p.cogort5, p.dosage, p.duration
+from med_met_patients p
+left join med_met_pill l on p.id=l.patient_id
+left join med_name m on l.name=m.id
+LEFT JOIN med_type t ON p.type_code = t.type_code
+JOIN jos_fields_values r ON p.userid = r.item_id AND r.field_id = 1
+JOIN jos_fields_values r2 ON p.userid = r2.item_id AND r2.field_id = 2
+WHERE p.type_code in ('" . $typelist . "')
+ AND r.value != 'Тестовое подразделение'  order by p.type_code, r.value, p.num");
+
+        $rows = $db->loadAssocList();
+        if (count($rows) > 0) {
+            $i = 12;
+            $h = 0;
+            $oldid = 0;
+            if ($type == 'epidermoliz_2024') $i = 17;
+            foreach ($rows as $row) {
+                if ($row['id'] != $oldid) $h++;
+                $oldid = $row['id'];
+                $sheet1 = $spreadsheet->getSheet(1);
+                $sheet1->setCellValue('A' . $i, $row['region']);
+                $sheet1->setCellValue('B' . $i, $h);
+                $sheet1->setCellValue('C' . $i, $row['name']);
+                $sheet1->setCellValue('D' . $i, $row['city']);
+                $sheet1->setCellValue('E' . $i, substr($row['birth_date'], 8, 2) . '.' . substr($row['birth_date'], 5, 2) . '.' . substr($row['birth_date'], 0, 4));
+                $sheet1->setCellValue('G' . $i, $row['weight']);
+
+                if ($type == 'hemo_child_2024' ||  $type == 'hemo_adult_2024'){
+                    $sheet1->setCellValue('A' . $i, $row['region']);
+                    $sheet1->setCellValue('B' . $i, $row['name']);
+                    $sheet1->setCellValue('C' . $i, $row['city']);
+                    $sheet1->setCellValue('D' . $i, substr($row['birth_date'], 8, 2) . '.' . substr($row['birth_date'], 5, 2) . '.' . substr($row['birth_date'], 0, 4));
+                    $sheet1->setCellValue('E' . $i, $row['weight']);
+                }
+
+                if ($type == 'nanizm_2024'){
+                    $sheet1->setCellValue('A' . $i, $row['region']);
+                    $sheet1->setCellValue('B' . $i, $row['city']);
+                    $sheet1->setCellValue('C' . $i, $row['age']);
+                    $sheet1->setCellValue('D' . $i, $row['cogort1']);
+                    $sheet1->setCellValue('E' . $i, $row['cogort2']);
+                    $sheet1->setCellValue('F' . $i, $row['cogort3']);
+                    $sheet1->setCellValue('G' . $i, $row['cogort4']);
+                    $sheet1->setCellValue('H' . $i, $row['patients_cnt']);
+                    $sheet1->setCellValue('I' . $i, $row['pillname'] . ", " . $row['release_form'] . ', ' . $row['pilldosage']);;
+                    $sheet1->setCellValue('J' . $i, $row['yearly_sum']);
+                    $sheet1->setCellValue('K' . $i, $row['active']);
+                }
+                if ($type == 'drt_2024'){
+                    $sheet1->setCellValue('A' . $i, $row['region']);
+                    $sheet1->setCellValue('B' . $i, $row['num']);
+                    $sheet1->setCellValue('C' . $i, $row['name']);
+                    $sheet1->setCellValue('D' . $i, $row['city']);
+                    $sheet1->setCellValue('E' . $i, $row['birth_date']);
+                    $sheet1->setCellValue('F' . $i, $row['scheme']);
+                }
+                if ($type == 'isd_2024') {
+                    $sheet1->setCellValue('G' . $i, $row['diagnos']);
+                    $sheet1->setCellValue('K' . $i, $row['pillname'] . ", " . $row['release_form'] . ', ' . $row['pilldosage']);
+                    $sheet1->setCellValue('L' . $i, $row['cnt']);
+                    $sheet1->setCellValue('M' . $i, $row['calc_dosage']);
+                    $sheet1->setCellValue('N' . $i, $row['yearly_cnt']);
+                    $sheet1->setCellValue('O' . $i, $row['yearly_sum']);
+                    $sheet1->setCellValue('P' . $i, $row['active']);
+                }
+
+                if ($type == 'hemo_child_2024' ||  $type == 'hemo_adult_2024') {
+                    $sheet1->setCellValue('E' . $i, $row['weight']);
+                    $sheet1->setCellValue('F' . $i, $row['diagnos']);
+                    $sheet1->setCellValue('G' . $i, $row['diagnos11']);
+                    $sheet1->setCellValue('H' . $i, $row['other_diagnos']);
+                    $sheet1->setCellValue('I' . $i, $row['sex']);
+                    $sheet1->setCellValue('J' . $i, $row['diagnos1']);
+                    $sheet1->setCellValue('K' . $i, strip_tags($row['profilactic']));
+                    $sheet1->setCellValue('L' . $i, strip_tags($row['profilactic_protocol']));
+                    $sheet1->setCellValue('Q' . $i, strip_tags($row['home_usage']));
+                    $sheet1->setCellValue('R' . $i, strip_tags($row['home_usage_cnt']));
+                    $sheet1->setCellValue('AC' . $i, strip_tags($row['urgent']));
+                    $sheet1->setCellValue('AD' . $i, strip_tags($row['urgent_text']));
+                    $sheet1->setCellValue('AE' . $i, strip_tags($row['urgent_volume']));
+                    $sheet1->setCellValue('AH' . $i, strip_tags($row['stomat']));
+                    $sheet1->setCellValue('AI' . $i, strip_tags($row['stomat_text']));
+                    $sheet1->setCellValue('AJ' . $i, strip_tags($row['stomat_volume']));
+                    $sheet1->setCellValue('AM' . $i, strip_tags($row['future']));
+                    $sheet1->setCellValue('AN' . $i, strip_tags($row['future_text']));
+                    $sheet1->setCellValue('AO' . $i, strip_tags($row['future_volume']));
+
+                    $db->setQuery("SELECT substring(patient_id,-2) tp,CONCAT(n.NAME,'/',n.release_form,'/',n.dosage) pill ,p.cnt
+FROM med_met_prev_pill p
+JOIN med_name n ON p.NAME=n.id
+WHERE p.active=1 and FLOOR(patient_id/100)=" . $row['id'] . "
+union all
+SELECT substring(p.patient_type1_id,-1) rt,CONCAT(n.NAME,'/',n.release_form,'/',n.dosage) pill ,IFNULL(p.cnt,'') cnt
+FROM med_met_request r
+join med_met_prev_pill p ON p.patient_type1_id=r.id*10+2
+JOIN med_name n ON p.NAME=n.id
+where p.active = 1 and r.patient_id=" . $row['id']
+
+
+                    );
+                    $rows1 = $db->loadAssocList();
+                    $j = $i;
+                    $maxj = $j;
+                    if (count($rows1) > 0) {
+                        $let = ['11' => 'M', '12' => 'O', '21' => 'S', '22' => 'U', '41' => 'AF', '51' => 'AK', '61' => 'AP', '2' => 'AA'];
+                        $letc = ['11' => 'N', '12' => 'P', '21' => 'T', '22' => 'V', '41' => 'AE', '51' => 'AL', '61' => 'AQ', '2' => 'AB'];
+                        $next = [];
+                        foreach ($rows1 as $row1) {
+                            if (isset($let[$row1['tp']])) {
+                                $letter = $let[$row1['tp']];
+                                if (!isset($next[$letter])) $next[$letter] = $i;
+                                else $next[$letter]++;
+                                $maxj = max($next[$letter], $maxj);
+                                $j = $next[$letter];
+                                $sheet1->setCellValue($let[$row1['tp']] . $j, $row1['pill']);
+                                $sheet1->setCellValue($letc[$row1['tp']] . $j, $row1['cnt']);
+                            }
+                        }
+                    }
+                    $j = $maxj;
+                    $db->setQuery("SELECT r.id,substring(p.patient_type1_id,-1) rt,r.localization,r.severity,ifnull(CONCAT(n.NAME,'/',n.release_form,'/',n.dosage,' (',p.cnt,')'),'') pill ,IFNULL(p.cnt,'') cnt
+FROM med_met_request r
+left join med_met_prev_pill p ON p.patient_type1_id=r.id*10+1 and p.active = 1
+left JOIN med_name n ON p.NAME=n.id
+where r.patient_id=" . $row['id'] . "
+ORDER BY r.id,p.id");
+                    $rows1 = $db->loadAssocList();
+                    $h = $i;
+                    if (count($rows1) > 0) {
+
+                        foreach ($rows1 as $row1) {
+                            $sheet1->setCellValue('W' . $h, $row1['localization']);
+                            $sheet1->setCellValue('X' . $h, $row1['severity']);
+                            $sheet1->setCellValue('Y' . $h, $row1['pill']);
+                            $sheet1->setCellValue('Z' . $h, $row1['cnt']);
+                            $h++;
+                        }
+                    }
+
+                    $i = max($j, $i + count($rows1) - 1, $h - 1);
+                }
+
+                if ($type == 'epidermoliz_2024') {
+                    $complicationslist = $row['complications'];
+                    $comp = json_decode($complicationslist);
+                    $complication = implode(', ', $comp);
+                    $localization = get_epidermoliz_localization($db, $row['title'], $row['name']);
+                    $square = get_epidermoliz_localization_square($db, $row['title'], $row['name']);
+                    $sheet1->setCellValue('F' . $i, $row['weight']);
+                    $sheet1->setCellValue('H' . $i, $row['height']);
+                    $sheet1->setCellValue('I' . $i, $row['diagnos']);
+                    $sheet1->setCellValue('J' . $i, $row['severity']);
+                    $sheet1->setCellValue('K' . $i, $row['distribution']);
+                    $sheet1->setCellValue('L' . $i, $localization);
+                    $sheet1->setCellValue('M' . $i, $square);
+                    $sheet1->setCellValue('O' . $i, $complication);
+                    $sheet1->setCellValue('P' . $i, $row['pillname'] . ", " . $row['release_form'] . ', ' . $row['pilldosage']);
+                    $sheet1->setCellValue('Q' . $i, $row['dosage']);
+                    $sheet1->setCellValue('R' . $i, $row['dose']);
+                    $sheet1->setCellValue('S' . $i, $row['cnt']);
+                    $sheet1->setCellValue('T' . $i, $row['yearly_cnt']);
+                    $sheet1->setCellValue('U' . $i, $row['yearly_sum']);
+                    $sheet1->setCellValue('V' . $i, $row['active']);
+                }
+
+                $i++;
+            }
+
+        }
+        if ($type == 'dcp_2024') {
+            $db->setQuery("select * from med_met_stat p
+LEFT JOIN med_type t ON p.type_code = t.type_code
+JOIN med_roles r ON p.userid = r.userid AND t.id = r.type_id
+where p.type_code='" . $type . "' AND r.region != 'Тестовое подразделение'
+order BY r.region, p.id");
+            $rows = $db->loadAssocList();
+            if (count($rows) > 0) {
+                $sheet1 = $spreadsheet->getSheet(1);
+                $i = 3;
+                foreach ($rows as $row) {
+                    $sheet1->setCellValue('A' . $i, $row['region']);
+                    $sheet1->setCellValue('B' . $i, $row['botulin']);
+                    $sheet1->setCellValue('C' . $i, $row['comment']);
+                    $i++;
+                }
+            }
+        }
+        return ($spreadsheet);
+    }
+
+
+    public function getConsolidatedNeedExcel()
+    {
+
+
+        $db = FabrikWorker::getDbo();
+        $query = $db->getQuery(true);
+
+        $user = JFactory::getUser();
+        $userid = $user->id * 1;
+        $app = JFactory::getApplication();
+        $input = $app->input;
+//        $type_id = (int)$input->get('type_id',0);
+        $type_code = $input->get('type_code');
+        $dev = (int)$input->get('dev', 0);
+
+
+        if ($dev == 1) $userid = 509;
+
+        if ($userid == 0)
+            return json_encode(['success' => false, 'error' => 'Для запиту інформації необхідно пройти авторизацію. Спробуйте оновити сторінку та авторизуватись.']);
+        if (count($type_code)== 0)
+            return json_encode(['success' => false, 'error' => 'Для запиту інформації необхідно ID напряму.']);
+
+        $db->setQuery("SELECT id AS type_id,type_code,name,ifnull(description,' ') description from med_type
+where type_code = '".$type_code."'
+order by id
+");
+
+        $i = 0;
+        $types = $db->loadAssocList();
+
+        $type_id = (int)$types[0]['type_id'];
+
+//        if ($type_id == 'gepatit_2023') $typelist = "gepatit_c_2023','gepatit_b_2023','gepatit_child_2023";
+//        else $typelist = $type_id;
+
+        switch ($type_id) {
+            case 432:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_imuno_2023.xlsx');
+                break;
+            case 445:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_imuno_2023.xlsx');
+                break;
+            case 474:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_dcp_2024.xlsx');
+                break;
+            case 475:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_drt_2024.xlsx');
+                break;
+            case 476:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_nanizm_2024.xlsx');
+                break;
+            case 477:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_epidermoliz_2024.xlsx');
+                break;
+            case 481:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_hemo_2024.xlsx');
+                break;
+            case 482:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_hemo_2024.xlsx');
+                break;
+            case 485:
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load('tmp/meddata_report_2024.xlsx');
+                break;
+
+            default:
+                return json_encode(['success' => false, 'error' => 'Некоректний ID напряму.']);
+        }
+
+
+
+        $db->setQuery("select description from med_type
+            where id=" . $type_id );
+        $desc = $db->loadResult();
+
+        foreach ($types as $in => $type) {
+            //print_r($type);
+            $sheet = $spreadsheet->getSheet(0);
+            $sheet->setCellValue('A1', $type['description']);
+            $type['name'] = substr($type['name'], 0, 5);
+            //$sheet->setTitle($type['name']);
+            $i++;
+            $test = $type['type_code'];
+
+            $db->setQuery("Select ifnull(b.budget,0) budget,a.doz_userid as doz_userid, u.email,a.region AS title, a.num as num,  ifnull(SUM(a.yearly_need),0) AS yearly_need, ifnull(SUM(a.yearly_real_need),0) AS yearly_real_need, ifnull(SUM(a.balance_total),0) AS balance_total, ifnull(SUM(a.balance_local),0) AS balance_local, ifnull(SUM(a.balance_local),0) AS balance_local,
+            ifnull(SUM(a.balance_lowterm),0) AS balance_lowterm,  ifnull(SUM(a.lowterm),0) AS lowterm, ifnull(SUM(a.expected_deliveries),0) AS expected_deliveries, ifnull(SUM(a.yearly_need_2023),0) AS yearly_need_2023, ifnull(SUM(a.yearly_need_2024),0) AS yearly_need_2024,  ifnull(SUM(a.monthly_need),0) AS monthly_need,
+            month_cnt, calc_yearly_need_added, a.name as name, unit, dosage, release_form, a.type as type, subtype, price, multiplicity, ifnull(SUM(a.expected_deliveries_local),0) as expected_deliveries_local, region, pillid
+             from med_application a
+            left join med_budget b on b.type_code=a.type_code and b.userid=a.userid
+            join jos_users u on a.userid=u.id
+            where a.type_code='" . $type['type_code'] . "'AND a.region != 'Тестовое подразделение'
+            GROUP BY a.doz_userid, a.pillid
+            order BY a.region,a.pillid
+            ");
+
+            $apps = $db->loadAssocList();
+            $data = array();
+
+            foreach ($apps as $j => $application) {
+
+                if (!isset($data['total']['application'][$application['pillid']]['yearly_real_need']))
+                    $data['total']['application'][$application['pillid']]['yearly_real_need'] = 0;
+                $data['total']['application'][$application['pillid']]['yearly_real_need'] += $application['yearly_real_need'];
+                if (!isset($data['total']['application'][$application['pillid']]['balance_total']))
+                    $data['total']['application'][$application['pillid']]['balance_total'] = 0;
+                $data['total']['application'][$application['pillid']]['balance_total'] += $application['balance_total'];
+                if (!isset($data['total']['application'][$application['pillid']]['balance_local']))
+                    $data['total']['application'][$application['pillid']]['balance_local'] = 0;
+                $data['total']['application'][$application['pillid']]['balance_local'] += $application['balance_local'];
+                if (!isset($data['total']['application'][$application['pillid']]['balance_lowterm']))
+                    $data['total']['application'][$application['pillid']]['balance_lowterm'] = 0;
+                $data['total']['application'][$application['pillid']]['balance_lowterm'] += $application['balance_lowterm'];
+                if (!isset($data['total']['application'][$application['pillid']]['lowterm']))
+                    $data['total']['application'][$application['pillid']]['lowterm'] = 0;
+                $data['total']['application'][$application['pillid']]['lowterm'] += (int)$application['lowterm'];
+                if (!isset($data['total']['application'][$application['pillid']]['expected_deliveries']))
+                    $data['total']['application'][$application['pillid']]['expected_deliveries'] = 0;
+                $data['total']['application'][$application['pillid']]['expected_deliveries'] += $application['expected_deliveries'];
+                if (!isset($data['total']['application'][$application['pillid']]['expected_deliveries_local']))
+                    $data['total']['application'][$application['pillid']]['expected_deliveries_local'] = 0;
+                $data['total']['application'][$application['pillid']]['expected_deliveries_local'] += $application['expected_deliveries_local'];
+                if (!isset($data['total']['application'][$application['pillid']]['multiplicity']))
+                    $data['total']['application'][$application['pillid']]['multiplicity'] = 0;
+                $data['total']['application'][$application['pillid']]['multiplicity'] += $application['multiplicity'];
+
+
+                if (!isset($data['total']['application'][$application['pillid']]['yearly_need']))
+                    $data['total']['application'][$application['pillid']]['yearly_need'] = 0;
+
+
+                if (!isset($data['total']['application'][$application['pillid']]['yearly_need_2023']))
+                    $data['total']['application'][$application['pillid']]['yearly_need_2023'] = 0;
+                if (!isset($data['total']['application'][$application['pillid']]['yearly_need_2024']))
+                    $data['total']['application'][$application['pillid']]['yearly_need_2024'] = 0;
+                $data['total']['application'][$application['pillid']]['yearly_need'] += $application['yearly_need'];
+                $data['total']['application'][$application['pillid']]['yearly_need_2023'] += $application['yearly_need_2023'];
+                $data['total']['application'][$application['pillid']]['yearly_need_2024'] += $application['yearly_need_2024'];
+                if (!isset($data['total']['application'][$application['pillid']]['monthly_need']))
+                    $data['total']['application'][$application['pillid']]['monthly_need'] = 0;
+                $data['total']['application'][$application['pillid']]['monthly_need'] += $application['yearly_need'] / $application['month_cnt'];
+
+                // Testing NUM
+                if (!isset($data['total']['application'][$application['pillid']]['num']))
+                    $data['total']['application'][$application['pillid']]['num'] = 0;
+                $data['total']['application'][$application['pillid']]['num'] += $application['num'];
+
+                // $apcalcneed = round(max(0,$application['yearly_need']+$application['yearly_need']*$application['add_month']/$application['month_cnt']-$application['balance_total']-$application['expected_deliveries']),0);
+                $apcalcneed = round($application['yearly_need'] - min(max(0, $application['balance_total'] + $application['expected_deliveries'] - $application['yearly_need'] * $application['add_month'] / $application['month_cnt']), $application['yearly_need']));
+                if (!isset($data['total']['application'][$application['pillid']]['calc_yearly_need_added']))
+                    $data['total']['application'][$application['pillid']]['calc_yearly_need_added'] = 0;
+                $data['total']['application'][$application['pillid']]['calc_yearly_need_added'] += $apcalcneed;
+
+                $data['total']['application'][$application['pillid']]['name'] = $application['name'];
+                $data['total']['application'][$application['pillid']]['unit'] = $application['unit'];
+                $data['total']['application'][$application['pillid']]['dosage'] = $application['dosage'];
+                $data['total']['application'][$application['pillid']]['release_form'] = $application['release_form'];
+                $data['total']['application'][$application['pillid']]['type'] = $application['type'];
+                $data['total']['application'][$application['pillid']]['subtype'] = $application['subtype'];
+                $data['total']['application'][$application['pillid']]['price'] = $application['price'];
+                $data['total']['application'][$application['pillid']]['num'] = $application['num'];
+                $data['total']['application'][$application['pillid']]['multiplicity'] = $application['multiplicity'];
+
+
+                $data[$application['title']]['budget'] = $application['budget'];
+                $data[$application['title']]['application'][$application['pillid']]['yearly_real_need'] = $application['yearly_real_need'];
+                $data[$application['title']]['application'][$application['pillid']]['balance_total'] = $application['balance_total'];
+                $data[$application['title']]['application'][$application['pillid']]['balance_local'] = $application['balance_local'];
+                $data[$application['title']]['application'][$application['pillid']]['balance_lowterm'] = $application['balance_lowterm'];
+                $data[$application['title']]['application'][$application['pillid']]['lowterm'] = $application['lowterm'];
+                $data[$application['title']]['application'][$application['pillid']]['expected_deliveries'] = $application['expected_deliveries'];
+                $data[$application['title']]['application'][$application['pillid']]['expected_deliveries_local'] = $application['expected_deliveries_local'];
+                $data[$application['title']]['application'][$application['pillid']]['multiplicity'] = $application['multiplicity'];
+                $data[$application['title']]['application'][$application['pillid']]['yearly_need'] = $application['yearly_need'];
+                $data[$application['title']]['application'][$application['pillid']]['yearly_need_2023'] = $application['yearly_need_2023'];
+                $data[$application['title']]['application'][$application['pillid']]['yearly_need_2024'] = $application['yearly_need_2024'];
+                $data[$application['title']]['application'][$application['pillid']]['monthly_need'] = $application['yearly_need'] / $application['month_cnt'];
+                $data[$application['title']]['application'][$application['pillid']]['calc_yearly_need_added'] = $apcalcneed;
+
+            }
+
+
+            $regid = 0;
+            $k = 0;
+            foreach ($data as $region => $apps) {
+                $j = 7;
+                if (strcmp($region, "total") != 0) {
+                    $sheet->getCellByColumnAndRow($regid * 8 + 11, 2)->setValue($region);
+                }
+                foreach ($apps['application'] as $pillid => $app) {
+                    $j++;
+                    if ($region == 'total') {
+                        $sheet->setCellValue('A' . $j, $data['total']['application'][$pillid]['num']);
+                        $sheet->setCellValue('F' . $j, $data['total']['application'][$pillid]['name']);
+                        $sheet->setCellValue('I' . $j, $data['total']['application'][$pillid]['unit']);
+                        $sheet->setCellValue('H' . $j, $data['total']['application'][$pillid]['dosage']);
+                        $sheet->setCellValue('G' . $j, $data['total']['application'][$pillid]['release_form']);
+                        $sheet->setCellValue('C' . $j, $data['total']['application'][$pillid]['type']);
+                        $sheet->setCellValue('D' . $j, $data['total']['application'][$pillid]['subtype']);
+                        $sheet->setCellValue('J' . $j, $data['total']['application'][$pillid]['price']);
+                        $sheet->setCellValue('K' . $j, $data['total']['application'][$pillid]['balance_total']);
+                        $sheet->setCellValue('L' . $j, $data['total']['application'][$pillid]['balance_local']);
+                        $sheet->setCellValue('M' . $j, $data['total']['application'][$pillid]['balance_lowterm']);
+                        $sheet->setCellValue('N' . $j, $data['total']['application'][$pillid]['multiplicity']);
+                        $sheet->setCellValue('O' . $j, $data['total']['application'][$pillid]['expected_deliveries_local']);
+                        $sheet->setCellValue('P' . $j, $data['total']['application'][$pillid]['yearly_need']);
+                        $sheet->setCellValue('Q' . $j, $data['total']['application'][$pillid]['yearly_need_2023']);
+                        $sheet->setCellValue('R' . $j, $data['total']['application'][$pillid]['yearly_need_2024']);
+                        //$sheet->setCellValue('S' . $j, $data['total']['application'][$pillid]['monthly_need']);
+                        // $sheet->setCellValue('S' . $j, $data['total']['application'][$pillid]['calc_yearly_need_added']);
+                        // $sheet->setCellValue('S' . $j, $data['total']['application'][$pillid]['yearly_real_need']);
+                    } else {
+                        $sheet->getCellByColumnAndRow($regid * 8 + 11, $j)->setValue($app['balance_total']);
+                        $sheet->getCellByColumnAndRow($regid * 8 + 12, $j)->setValue($app['balance_local']);
+                        // $sheet->getCellByColumnAndRow($regid * 8 + 13, $j)->setValue($app['lowterm']);
+                        $sheet->getCellByColumnAndRow($regid * 8 + 13, $j)->setValue($app['balance_lowterm']);
+                        $sheet->getCellByColumnAndRow($regid * 8 + 14, $j)->setValue($app['multiplicity']);
+                        $sheet->getCellByColumnAndRow($regid * 8 + 15, $j)->setValue($app['expected_deliveries_local']);
+                        $sheet->getCellByColumnAndRow($regid * 8 + 16, $j)->setValue($app['yearly_need']);
+                        $sheet->getCellByColumnAndRow($regid * 8 + 17, $j)->setValue($app['yearly_need_2023']);
+                        $sheet->getCellByColumnAndRow($regid * 8 + 18, $j)->setValue($app['yearly_need_2024']);
+                        // $sheet->getCellByColumnAndRow($regid * 13 + 19, $j)->setValue($app['calc_yearly_need_added']);
+                        //$sheet->getCellByColumnAndRow($regid * 13 + 21, $j)->setValue($app['yearly_real_need']);
+                    }
+                }
+                $sheet->getCellByColumnAndRow($regid * 13 + 22, 309)->setValue($data[$region]['budget']);
+                $regid++;
+                $k++;
+            }
+
+            //Delete not used rows
+
+            $sheet->removeRow($j + 1, 407 - $j);
+
+
+            //Searching names of the columns and place formulas in them
+
+            $regid = 0;
+            $a = 9;
+            for ($i = 0; $i <= $k; $i++) {
+                if ($regid == 0) {
+                    $letter = $this->GetColumnName(10);
+                    $sheet->setCellValueByColumnAndRow(10, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName(11);
+                    $sheet->setCellValueByColumnAndRow(11, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName(12);
+                    $sheet->setCellValueByColumnAndRow(12, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+
+                    //           Place for "expiry date" column.
+
+                    $letter = $this->GetColumnName(14);
+                    $sheet->setCellValueByColumnAndRow(14, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName(15);
+                    $sheet->setCellValueByColumnAndRow(15, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName(16);
+                    $sheet->setCellValueByColumnAndRow(16, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName(17);
+                    $sheet->setCellValueByColumnAndRow(17, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName(18);
+                    $sheet->setCellValueByColumnAndRow(18, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName(19);
+                    $sheet->setCellValueByColumnAndRow(19, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName(20);
+                    $sheet->setCellValueByColumnAndRow(20, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                }
+                else if ($regid >= 2) {
+                    $letter = $this->GetColumnName($regid * $a - 1);
+                    $sheet->setCellValueByColumnAndRow($regid * $a - 1, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a);
+                    $sheet->setCellValueByColumnAndRow($regid * $a, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a + 1);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 1, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+
+                    //           Place for "expiry date" column.
+
+                    $letter = $this->GetColumnName($regid * $a + 3);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 3, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a + 4);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 4, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a + 5);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 5, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a + 6);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 6, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a + 7);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 7, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a + 8);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 8, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a + 9);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 9, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                    $letter = $this->GetColumnName($regid * $a + 10);
+                    $sheet->setCellValueByColumnAndRow($regid * $a + 10, $j + 1, '=SUM(' . $letter . '8:' . $letter . $j . ')');
+                }
+                $regid++;
+            }
+        }
+
+        $spreadsheet = $this->insert_patients($test, $spreadsheet);
+
+        $writer = new Xlsx($spreadsheet);
+
+        header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        header('Content-Disposition: attachment;filename="' . $test . '_report_total.xlsx"');
+        header('Cache-Control: max-age=0');
+        $writer->save('php://output');
+
+        die;
+    }
+}
