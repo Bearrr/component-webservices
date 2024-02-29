@@ -1,5 +1,5 @@
 <?php
-public function saveKawasakiDetails()
+    public function saveKawasakiDetails()
     {
 
         $db = FabrikWorker::getDbo();
@@ -40,3 +40,21 @@ public function saveKawasakiDetails()
             $new_id = $object->id;
             $data['id'] = $new_id;
         }
+
+        $query = "SELECT ROUND(yearly_sum*10) cnt
+ from med_met_stat s
+where userid=$userid and type_code='imuno_kavasaki_2024'
+";
+
+        $db->setQuery($query);
+        $result = $db->loadAssocList();
+        foreach ($result as $pr => $pill) {
+            $q = "update med_application set yearly_need_multiplicity=" . $pill['cnt'] . " where userid=$userid and pillid=17167";
+            $db->setQuery($q);
+            $db->execute();
+        }
+
+        $db->execute();
+
+        return json_encode(['success' => true, 'data' => $data]);
+    }
